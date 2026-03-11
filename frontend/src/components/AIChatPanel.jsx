@@ -84,6 +84,27 @@ export default function AIChatPanel() {
         assistantContent += `\n\n✅ Updated: ${labels}`;
       }
 
+      // Display scheduled followup confirmation
+      if (res.followup_data) {
+        const f = res.followup_data;
+        assistantContent += `\n\n📅 Follow-up scheduled: ${f.followup_type || "Task"} with ${f.hcp_name || "HCP"}`;
+        if (f.due_date) assistantContent += ` on ${f.due_date}`;
+        if (f.task) assistantContent += `\n   Task: ${f.task}`;
+        if (f.status) assistantContent += ` (${f.status})`;
+      }
+
+      // Display HCP interaction history
+      if (res.hcp_history && res.hcp_history.length > 0) {
+        assistantContent += `\n\n📋 Interaction history:`;
+        res.hcp_history.forEach((h, idx) => {
+          assistantContent += `\n${idx + 1}. ${h.date || "No date"} — ${h.interaction_type || "Interaction"}`;
+          if (h.topics_discussed) assistantContent += `: ${h.topics_discussed}`;
+          if (h.sentiment) assistantContent += ` (${h.sentiment})`;
+        });
+      } else if (res.hcp_history !== undefined && res.hcp_history !== null && res.hcp_history.length === 0) {
+        assistantContent += `\n\nNo interaction history found for this HCP.`;
+      }
+
       dispatch(addMessage({ role: "assistant", content: assistantContent }));
     } catch (err) {
       dispatch(

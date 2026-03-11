@@ -102,10 +102,10 @@ Chat history:
 User message: {user_input}
 
 Return ONLY a valid JSON object containing the changed fields. No markdown, no explanation, no extra text.
-If the user changes 2 fields, return only those 2 fields.
+If the user changes 2 fields, return only those 2 fields. Do NOT copy the example output — extract from the actual user message.
 
-Example input:  "Sorry the name was actually Dr John and the sentiment was negative."
-Example output: {{"hcp_name":"Dr John","sentiment":"Negative"}}
+Example input:  "Change the sentiment to positive and add follow up: send results by email."
+Example output: {{"sentiment":"Positive","follow_up_actions":"send results by email"}}
 
 Now extract ONLY the corrections from the user message above:"""
 
@@ -173,11 +173,110 @@ Generate a short confirmation message (2-3 sentences max) based on what just hap
 
 Action performed: {intent}
 Fields that were {intent_verb}: {extracted_fields}
+Current form state (full context): {current_form_state}
 AI suggested follow-ups: {ai_suggested_followups}
 
 Rules:
 - If action is "log": Confirm you captured the interaction. Name the key details briefly.
-- If action is "edit": Confirm which fields changed and their new values.
+- If action is "edit": Confirm which fields changed and their new values. Use the HCP name from the current form state — do NOT invent or guess a different name.
+- If action is "followup": Confirm the follow-up was scheduled. Mention the HCP name, task, and due date.
+- If action is "history": Briefly acknowledge the history lookup. The actual history data will be provided separately.
 - Be conversational and professional. Do NOT list raw JSON keys.
-- Use the doctor's name if available.
+- Use the doctor's name from current form state if available. NEVER guess or hallucinate a name.
 - Keep it concise."""
+
+
+# ---------------------------------------------------------------------------
+#  Extended intent classification (supports followup + history intents)
+# ---------------------------------------------------------------------------
+
+EXTENDED_INTENT_CLASSIFICATION_PROMPT = """\
+You are an AI assistant for a pharmaceutical CRM system.
+A field representative is chatting about an HCP (Healthcare Professional) interaction.
+
+Classify the user's message into exactly ONE intent:
+
+"log"      — The user is describing a NEW interaction or providing details for the first time.
+"edit"     — The user is CORRECTING or UPDATING specific fields that are already filled in.
+"followup" — The user wants to SCHEDULE a follow-up task (call, meeting, email) with an HCP.
+"history"  — The user is ASKING about past interactions or history with a specific HCP.
+"general"  — The user is asking a question, greeting, or chatting about something unrelated.
+
+Rules:
+- If the current form is mostly empty and the user describes an interaction → "log"
+- If the current form already has data and the user says words like "actually", "correction", "change", "update", "sorry", "wrong" → "edit"
+- If the user mentions scheduling, setting up, planning a follow-up, reminder, or future task → "followup"
+- If the user asks about history, past interactions, previous meetings, last visit, track record → "history"
+- If the message does not match any above → "general"
+
+Current form state:
+{current_form_state}
+
+Chat history:
+{chat_history}
+
+User message: {user_input}
+
+Respond with ONLY one word: log, edit, followup, history, or general
+No punctuation. No explanation. Just the single word."""
+
+
+# ---------------------------------------------------------------------------
+#  Followup extraction prompt
+# ---------------------------------------------------------------------------
+
+FOLLOWUP_EXTRACTION_PROMPT = """\
+You are a structured-data extraction engine for a pharmaceutical CRM.
+
+A field representative wants to schedule a follow-up task with an HCP. Extract the details.
+
+Fields to extract (include only those mentioned):
+
+| Field          | Type   | Allowed values / format                          |
+|----------------|--------|--------------------------------------------------|
+| hcp_name       | string | Full name of the doctor or HCP                   |
+| task           | string | Description of the follow-up task                |
+| due_date       | string | YYYY-MM-DD — resolve relative dates like "next Tuesday", "in 2 weeks", "tomorrow" relative to today ({today}) |
+| followup_type  | string | "Meeting" or "Call" or "Email"                    |
+| notes          | string | Any additional context or notes                   |
+
+Chat history:
+{chat_history}
+
+User message: {user_input}
+
+Return ONLY a valid JSON object with the extracted fields. No markdown, no explanation.
+
+Example input: "Schedule a follow-up call with Dr. Smith next Tuesday to discuss trial results"
+Example output: {{"hcp_name":"Dr. Smith","task":"Discuss trial results","due_date":"{example_due_date}","followup_type":"Call"}}
+
+Now extract from the user message above:"""
+
+
+# ---------------------------------------------------------------------------
+#  History lookup extraction prompt
+# ---------------------------------------------------------------------------
+
+HISTORY_EXTRACTION_PROMPT = """\
+You are a structured-data extraction engine for a pharmaceutical CRM.
+
+A field representative is asking about their interaction history with an HCP. Extract the query parameters.
+
+Fields to extract (include only those mentioned):
+
+| Field        | Type   | Description                                      |
+|--------------|--------|--------------------------------------------------|
+| hcp_name     | string | Full name of the doctor or HCP being asked about |
+| limit        | int    | How many past interactions to return (default 5)  |
+
+Chat history:
+{chat_history}
+
+User message: {user_input}
+
+Return ONLY a valid JSON object with the extracted fields. No markdown, no explanation.
+
+Example input: "What's my history with Dr. Patel?"
+Example output: {{"hcp_name":"Dr. Patel"}}
+
+Now extract from the user message above:"""

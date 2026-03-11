@@ -24,6 +24,7 @@ async def get_db() -> AsyncSession:
 async def init_db():
     # Import models so Base.metadata registers their tables before create_all.
     from app.models.interaction import Interaction  # noqa: F401
+    from app.models.followup import Followup  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

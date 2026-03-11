@@ -238,12 +238,144 @@ def respond(state: AgentState) -> dict:
         reply = _call_groq(prompt, temperature=0.5)
         return {"response": reply}
 
-    intent_verb_map = {"log": "logged", "edit": "updated", "voice_note": "extracted from voice note"}
+    intent_verb_map = {
+        "log": "logged",
+        "edit": "updated",
+        "voice_note": "extracted from voice note",
+        "followup": "scheduled",
+        "history": "looked up",
+    }
+    current_form = state.get("current_form_state", {})
     prompt = RESPONSE_GENERATION_PROMPT.format(
         intent=intent,
         intent_verb=intent_verb_map.get(intent, "processed"),
         extracted_fields=json.dumps(extracted, indent=2),
+        current_form_state=json.dumps(current_form, indent=2),
         ai_suggested_followups=json.dumps(followups) if followups else "None",
     )
     reply = _call_groq(prompt, temperature=0.5)
     return {"response": reply}
+
+
+# ---- Node: parse_input_extended ----
+
+def parse_input_extended(state: AgentState) -> dict:
+    """Extended intent classification that supports followup and history intents.
+
+    This replaces the original parse_input in the graph while the original
+    function remains available for backward-compatibility.
+    """
+    from app.agent.prompts import EXTENDED_INTENT_CLASSIFICATION_PROMPT
+
+    # If intent is already set (e.g. voice_note from the /voice-note endpoint),
+    # skip LLM classification and pass through.
+    pre_set_intent = state.get("intent")
+    if pre_set_intent and pre_set_intent != "general":
+        return {"intent": pre_set_intent, "extracted_fields": state.get("extracted_fields") or {}}
+
+    chat_history_str = _format_chat_history(state.get("chat_history", []))
+    current_form = state.get("current_form_state", {})
+    user_input = state["user_input"]
+
+    # Classify intent with extended prompt
+    intent_prompt = EXTENDED_INTENT_CLASSIFICATION_PROMPT.format(
+        current_form_state=json.dumps(current_form, indent=2),
+        chat_history=chat_history_str,
+        user_input=user_input,
+    )
+    intent_raw = _call_groq(intent_prompt, temperature=0.0).strip().lower()
+
+    # Normalize intent — check more specific intents first to avoid false matches
+    if "followup" in intent_raw or "follow-up" in intent_raw or "follow up" in intent_raw:
+        intent = "followup"
+    elif "history" in intent_raw:
+        intent = "history"
+    elif "edit" in intent_raw:
+        intent = "edit"
+    elif "log" in intent_raw:
+        intent = "log"
+    else:
+        intent = "general"
+
+    # Extract fields for log/edit (reuse existing prompts).
+    # For followup and history, extraction happens in their dedicated handler nodes.
+    extracted = {}
+    if intent == "log":
+        extract_prompt = LOG_EXTRACTION_PROMPT.format(
+            chat_history=chat_history_str,
+            user_input=user_input,
+        )
+        raw = _call_groq(extract_prompt, temperature=0.0)
+        extracted = _parse_json(raw)
+    elif intent == "edit":
+        extract_prompt = EDIT_EXTRACTION_PROMPT.format(
+            current_form_state=json.dumps(current_form, indent=2),
+            chat_history=chat_history_str,
+            user_input=user_input,
+        )
+        raw = _call_groq(extract_prompt, temperature=0.0)
+        extracted = _parse_json(raw)
+
+    return {
+        "intent": intent,
+        "extracted_fields": extracted,
+    }
+
+
+# ---- Node: handle_followup ----
+
+def handle_followup(state: AgentState) -> dict:
+    """Extract followup scheduling details via LLM and normalize via tool."""
+    from datetime import timedelta as td
+    from app.agent.prompts import FOLLOWUP_EXTRACTION_PROMPT
+    from app.agent.tools import schedule_followup
+
+    chat_history_str = _format_chat_history(state.get("chat_history", []))
+    user_input = state["user_input"]
+
+    from datetime import date
+    today = date.today()
+    # Calculate an example "next Tuesday" for the prompt
+    days_ahead = 1 - today.weekday()  # Tuesday = weekday 1
+    if days_ahead <= 0:
+        days_ahead += 7
+    example_due_date = (today + td(days=days_ahead)).strftime("%Y-%m-%d")
+
+    extract_prompt = FOLLOWUP_EXTRACTION_PROMPT.format(
+        chat_history=chat_history_str,
+        user_input=user_input,
+        today=today.strftime("%Y-%m-%d"),
+        example_due_date=example_due_date,
+    )
+    raw = _call_groq(extract_prompt, temperature=0.0)
+    extracted = _parse_json(raw)
+    normalized = schedule_followup(extracted)
+
+    return {
+        "extracted_fields": normalized,
+        "ai_suggested_followups": None,
+    }
+
+
+# ---- Node: handle_history ----
+
+def handle_history(state: AgentState) -> dict:
+    """Extract HCP history query parameters via LLM and normalize via tool."""
+    from app.agent.prompts import HISTORY_EXTRACTION_PROMPT
+    from app.agent.tools import validate_history_query
+
+    chat_history_str = _format_chat_history(state.get("chat_history", []))
+    user_input = state["user_input"]
+
+    extract_prompt = HISTORY_EXTRACTION_PROMPT.format(
+        chat_history=chat_history_str,
+        user_input=user_input,
+    )
+    raw = _call_groq(extract_prompt, temperature=0.0)
+    extracted = _parse_json(raw)
+    normalized = validate_history_query(extracted)
+
+    return {
+        "extracted_fields": normalized,
+        "ai_suggested_followups": None,
+    }

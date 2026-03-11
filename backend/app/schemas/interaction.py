@@ -19,6 +19,8 @@ class ChatResponse(BaseModel):
     tool_used: Optional[str] = None
     extracted_fields: Optional[dict] = None
     ai_suggested_followups: Optional[list[str]] = None
+    followup_data: Optional[dict] = None
+    hcp_history: Optional[list[dict]] = None
 
 
 # ---------- Voice Note ----------
