@@ -21,6 +21,15 @@ class ChatResponse(BaseModel):
     ai_suggested_followups: Optional[list[str]] = None
 
 
+# ---------- Voice Note ----------
+
+class VoiceNoteResponse(BaseModel):
+    transcription: str
+    reply: str
+    extracted_fields: dict = Field(default_factory=dict)
+    ai_suggested_followups: Optional[list[str]] = None
+
+
 # ---------- Interaction CRUD ----------
 
 class InteractionCreate(BaseModel):

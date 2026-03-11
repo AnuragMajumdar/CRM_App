@@ -17,8 +17,9 @@ from app.agent.prompts import (
     EDIT_EXTRACTION_PROMPT,
     FOLLOWUP_SUGGESTION_PROMPT,
     RESPONSE_GENERATION_PROMPT,
+    VOICE_NOTE_EXTRACTION_PROMPT,
 )
-from app.agent.tools import log_interaction, edit_interaction
+from app.agent.tools import log_interaction, edit_interaction, summarize_voice_interaction
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,13 @@ def _format_chat_history(chat_history: list[dict]) -> str:
 
 def parse_input(state: AgentState) -> dict:
     """Classify intent and extract fields from user input."""
+
+    # If intent is already set (e.g. voice_note from the /voice-note endpoint),
+    # skip LLM classification and pass through to the appropriate handler.
+    pre_set_intent = state.get("intent")
+    if pre_set_intent and pre_set_intent != "general":
+        return {"intent": pre_set_intent, "extracted_fields": state.get("extracted_fields") or {}}
+
     chat_history_str = _format_chat_history(state.get("chat_history", []))
     current_form = state.get("current_form_state", {})
     user_input = state["user_input"]
@@ -180,6 +188,36 @@ def handle_edit(state: AgentState) -> dict:
     }
 
 
+# ---- Node: handle_voice ----
+
+def handle_voice(state: AgentState) -> dict:
+    """Extract structured fields from a voice note transcription using the LLM."""
+    transcription = state["user_input"]
+
+    # Use the LLM to extract structured fields from the transcription
+    extract_prompt = VOICE_NOTE_EXTRACTION_PROMPT.format(
+        transcribed_text=transcription
+    )
+    raw = _call_groq(extract_prompt, temperature=0.0)
+    extracted = _parse_json(raw)
+
+    # Normalize through the summarize_voice_interaction tool
+    normalized = summarize_voice_interaction(extracted)
+
+    # Generate AI follow-up suggestions
+    interaction_summary = json.dumps(normalized, indent=2)
+    followup_prompt = FOLLOWUP_SUGGESTION_PROMPT.format(
+        interaction_details=interaction_summary
+    )
+    followup_raw = _call_groq(followup_prompt, temperature=0.3)
+    followups = _parse_json_array(followup_raw)
+
+    return {
+        "extracted_fields": normalized,
+        "ai_suggested_followups": followups if followups else None,
+    }
+
+
 # ---- Node: respond ----
 
 def respond(state: AgentState) -> dict:
@@ -200,9 +238,10 @@ def respond(state: AgentState) -> dict:
         reply = _call_groq(prompt, temperature=0.5)
         return {"response": reply}
 
+    intent_verb_map = {"log": "logged", "edit": "updated", "voice_note": "extracted from voice note"}
     prompt = RESPONSE_GENERATION_PROMPT.format(
         intent=intent,
-        intent_verb="logged" if intent == "log" else "updated",
+        intent_verb=intent_verb_map.get(intent, "processed"),
         extracted_fields=json.dumps(extracted, indent=2),
         ai_suggested_followups=json.dumps(followups) if followups else "None",
     )

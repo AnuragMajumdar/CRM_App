@@ -4,15 +4,16 @@ LangGraph agent graph definition.
 Graph flow:
   START -> parse_input -> route_tool
     route_tool:
-      "log"     -> handle_log  -> respond -> END
-      "edit"    -> handle_edit -> respond -> END
-      "general" -> respond -> END
+      "log"        -> handle_log   -> respond -> END
+      "edit"       -> handle_edit  -> respond -> END
+      "voice_note" -> handle_voice -> respond -> END
+      "general"    -> respond -> END
 """
 
 from langgraph.graph import StateGraph, END
 
 from app.agent.state import AgentState
-from app.agent.nodes import parse_input, handle_log, handle_edit, respond
+from app.agent.nodes import parse_input, handle_log, handle_edit, handle_voice, respond
 
 
 def route_tool(state: AgentState) -> str:
@@ -22,6 +23,8 @@ def route_tool(state: AgentState) -> str:
         return "handle_log"
     elif intent == "edit":
         return "handle_edit"
+    elif intent == "voice_note":
+        return "handle_voice"
     else:
         return "respond"
 
@@ -34,6 +37,7 @@ def build_graph() -> StateGraph:
     graph.add_node("parse_input", parse_input)
     graph.add_node("handle_log", handle_log)
     graph.add_node("handle_edit", handle_edit)
+    graph.add_node("handle_voice", handle_voice)
     graph.add_node("respond", respond)
 
     # Set entry point
@@ -46,6 +50,7 @@ def build_graph() -> StateGraph:
         {
             "handle_log": "handle_log",
             "handle_edit": "handle_edit",
+            "handle_voice": "handle_voice",
             "respond": "respond",
         },
     )
@@ -53,6 +58,7 @@ def build_graph() -> StateGraph:
     # After tool handling, always go to respond
     graph.add_edge("handle_log", "respond")
     graph.add_edge("handle_edit", "respond")
+    graph.add_edge("handle_voice", "respond")
 
     # respond -> END
     graph.add_edge("respond", END)

@@ -131,6 +131,41 @@ Example: ["Schedule follow-up meeting in 2 weeks","Send OncoBoost Phase III PDF"
 #  Response generation prompt
 # ---------------------------------------------------------------------------
 
+VOICE_NOTE_EXTRACTION_PROMPT = """\
+You are a structured-data extraction engine for a pharmaceutical CRM.
+
+A field representative recorded a voice note describing an HCP interaction.
+Below is the transcribed text. Extract ALL mentioned details into JSON.
+
+Fields to extract (include only those mentioned, set missing fields to null):
+
+| Field                | Type            | Allowed values / format                     |
+|----------------------|-----------------|---------------------------------------------|
+| hcp_name             | string          | Full name of the doctor or HCP              |
+| interaction_type     | string          | "Meeting" or "Call" or "Email" or "Conference" |
+| date                 | string          | YYYY-MM-DD — use "today" if they say "today" |
+| time                 | string          | HH:MM in 24-hour format                     |
+| attendees            | list of strings | Names of other people who attended           |
+| topics_discussed     | string          | Summary of discussion topics                 |
+| materials_shared     | list of strings | Brochures, PDFs, documents shared            |
+| samples_distributed  | list of strings | Drug samples given                           |
+| sentiment            | string          | "Positive" or "Neutral" or "Negative"        |
+| outcomes             | string          | Agreements, decisions, results               |
+| follow_up_actions    | string          | Next steps the rep should take               |
+
+Rules:
+- Output ONLY a valid JSON object. No markdown, no explanation, no extra text.
+- If a field is not mentioned in the transcript, set it to null.
+- Normalize sentiment strictly to "Positive", "Neutral", or "Negative".
+- If the transcript mentions sharing brochures, PDFs, or documents, put them in materials_shared.
+- If the transcript mentions giving drug samples, put them in samples_distributed.
+
+Transcribed voice note:
+{transcribed_text}
+
+Return ONLY the JSON object:"""
+
+
 RESPONSE_GENERATION_PROMPT = """\
 You are a friendly AI assistant helping a pharmaceutical field representative log HCP interactions.
 

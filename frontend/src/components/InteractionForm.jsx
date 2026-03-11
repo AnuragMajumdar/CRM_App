@@ -2,6 +2,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { setField, resetForm, setSaveStatus } from "../store/interactionSlice";
 import { resetChat } from "../store/chatSlice";
 import { saveInteraction } from "../api/client";
+import VoiceNoteButton from "./VoiceNoteButton";
 import "./InteractionForm.css";
 
 const INTERACTION_TYPES = ["Meeting", "Call", "Email", "Conference"];
@@ -150,7 +151,10 @@ export default function InteractionForm() {
 
         {/* Topics Discussed */}
         <div className={hl("topics_discussed")}>
-          <label>Topics Discussed</label>
+          <div className="label-with-voice">
+            <label>Topics Discussed</label>
+            <VoiceNoteButton />
+          </div>
           <textarea
             rows={3}
             placeholder="Enter key discussion points..."

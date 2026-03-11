@@ -322,6 +322,77 @@ textarea::placeholder {
   background: #f8fafc;
 }
 
+/* ---- Label with voice note button ---- */
+
+.label-with-voice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- Voice Note Button ---- */
+
+.voice-note-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "Inter", sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.voice-note-btn:hover {
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.voice-note-btn.recording {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+  animation: recording-pulse 1.5s ease-in-out infinite;
+}
+
+.voice-note-btn.processing {
+  background: #eef2ff;
+  color: #6366f1;
+  border-color: #c7d2fe;
+  cursor: wait;
+}
+
+.voice-note-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+
+.voice-note-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #c7d2fe;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ---- AI-updated field highlight ---- */
 
 .ai-updated {

@@ -18,6 +18,20 @@ export async function sendChatMessage(sessionId, message, currentFormState, chat
   return res.json();
 }
 
+export async function sendVoiceNote(audioBlob) {
+  const formData = new FormData();
+  formData.append("audio_file", audioBlob, "voice_note.webm");
+  const res = await fetch(`${API_BASE}/voice-note`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Voice note failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function saveInteraction(formData) {
   const res = await fetch(`${API_BASE}/interaction`, {
     method: "POST",

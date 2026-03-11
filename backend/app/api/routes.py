@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import os
 import uuid
 import logging
+import tempfile
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
+from groq import Groq
 
 from app.db.database import get_db
+from app.config import get_settings
 from app.schemas.interaction import (
     ChatRequest,
     ChatResponse,
     InteractionCreate,
     InteractionUpdate,
     InteractionResponse,
+    VoiceNoteResponse,
 )
 from app.services.interaction_service import (
     create_interaction,
@@ -22,6 +27,7 @@ from app.services.interaction_service import (
 from app.agent.graph import agent
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 router = APIRouter()
 
@@ -62,6 +68,66 @@ async def chat(request: ChatRequest):
     except Exception as e:
         logger.exception("Agent invocation failed")
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+
+# ---------- Voice Note endpoint ----------
+
+@router.post("/voice-note", response_model=VoiceNoteResponse)
+async def voice_note(audio_file: UploadFile = File(...)):
+    """
+    Accept an audio file, transcribe it via Groq Whisper,
+    then pass the transcription through the LangGraph agent
+    to extract structured interaction fields.
+    """
+    try:
+        # Step 1: Save uploaded audio to a temp file
+        suffix = os.path.splitext(audio_file.filename or "audio.webm")[1] or ".webm"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await audio_file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # Step 2: Transcribe using Groq Whisper API
+        groq_client = Groq(api_key=settings.GROQ_API_KEY)
+        with open(tmp_path, "rb") as audio:
+            transcription_response = groq_client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=audio,
+                response_format="text",
+            )
+
+        # Clean up temp file
+        os.unlink(tmp_path)
+
+        transcribed_text = str(transcription_response).strip()
+        if not transcribed_text:
+            raise HTTPException(status_code=400, detail="Could not transcribe audio — empty result.")
+
+        logger.info("Voice note transcribed: %s", transcribed_text[:200])
+
+        # Step 3: Pass transcription to LangGraph agent with voice_note intent
+        result = agent.invoke({
+            "user_input": transcribed_text,
+            "current_form_state": {},
+            "chat_history": [],
+            "intent": "voice_note",
+            "extracted_fields": None,
+            "ai_suggested_followups": None,
+            "response": None,
+        })
+
+        return VoiceNoteResponse(
+            transcription=transcribed_text,
+            reply=result.get("response", "Voice note processed successfully."),
+            extracted_fields=result.get("extracted_fields") or {},
+            ai_suggested_followups=result.get("ai_suggested_followups"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Voice note processing failed")
+        raise HTTPException(status_code=500, detail=f"Voice note error: {str(e)}")
 
 
 # ---------- CRUD endpoints ----------

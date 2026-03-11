@@ -104,3 +104,14 @@ def edit_interaction(extracted_fields: dict, current_form_state: dict) -> dict:
     Returns only the changed fields (normalized).
     """
     return validate_and_normalize(extracted_fields)
+
+
+def summarize_voice_interaction(extracted_fields: dict) -> dict:
+    """
+    Tool 3: summarize_voice_interaction
+    Validates and normalizes fields extracted from a voice note transcription.
+    Returns the full set of cleaned fields (same normalization as log_interaction).
+    """
+    return validate_and_normalize(extracted_fields)
+
+
