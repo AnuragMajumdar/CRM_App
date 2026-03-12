@@ -40,6 +40,7 @@ This application allows pharmaceutical field representatives to log, edit, and t
 - Retrieves interaction history per HCP
 
 ---
+![HCP Photo](<LLM App.png>)
 
 ## Architecture
 
