@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "https://crm-app-qvt1.onrender.com/api";
 
 export async function sendChatMessage(sessionId, message, currentFormState, chatHistory) {
   const res = await fetch(`${API_BASE}/chat`, {
