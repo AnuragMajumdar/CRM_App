@@ -1,3 +1,4 @@
+// Production API base URL
 const API_BASE = import.meta.env.VITE_API_URL || "https://crm-app-qvt1.onrender.com/api";
 
 export async function sendChatMessage(sessionId, message, currentFormState, chatHistory) {
