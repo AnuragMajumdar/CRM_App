@@ -1,5 +1,5 @@
-// Production API base URL
-const API_BASE = import.meta.env.VITE_API_URL || "https://crm-app-qvt1.onrender.com/api";
+// API base URL - use env var in dev, hardcoded for production
+const API_BASE = "https://crm-app-qvt1.onrender.com/api";
 
 export async function sendChatMessage(sessionId, message, currentFormState, chatHistory) {
   const res = await fetch(`${API_BASE}/chat`, {
